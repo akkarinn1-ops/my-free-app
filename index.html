@@ -67,6 +67,9 @@
       <input id="memo" placeholder="メモ（例：○○SS、給油量○○L など）" style="flex:1; min-width:220px;" />
       <button id="save">保存</button>
       <button id="export">エクスポート</button>
+      <input id="receipt" type="file" accept="image/*" capture="environment" />
+      <button id="ocr">OCR</button>
+      <span id="ocrStatus" class="muted"></span>
     </div>
     <div class="muted">※ 端末内（localStorage）に保存。オフラインOK。</div>
   </div>
@@ -78,5 +81,7 @@
   </div>
 
   <script src="app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 </body>
 </html>
+
