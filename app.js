@@ -20,6 +20,105 @@ const memoI = document.getElementById('memo');
 const listEl = document.getElementById('list');
 const selTitle = document.getElementById('selTitle');
 
+// ---- OCR（Tesseract.js） ----
+const receiptI = document.getElementById('receipt');
+const ocrBtn = document.getElementById('ocr');
+const ocrStatus = document.getElementById('ocrStatus');
+
+ocrBtn.onclick = async () => {
+  const file = receiptI.files && receiptI.files[0];
+  if (!file) return alert('レシート画像を選んでね');
+
+  try {
+    ocrStatus.textContent = '前処理中...';
+
+    // 1) 画像を縮小＆白黒化（精度/速度UPのため）
+    const dataURL = await toPreprocessedDataURL(file, 1600); // 最大幅1600px
+
+    // 2) OCR実行
+    ocrStatus.textContent = 'OCR実行中...';
+    const { data } = await Tesseract.recognize(dataURL, 'jpn', {
+      logger: m => {
+        if (m.status && m.progress != null) {
+          ocrStatus.textContent = `${m.status} ${(m.progress*100|0)}%`;
+        }
+      }
+    });
+
+    const text = data.text || '';
+    // 3) 金額候補の抽出（合計/お支払/現計 などを優先）
+    const amount = pickAmount(text);
+    if (amount) amountI.value = amount;
+
+    // 4) 全文はメモへ
+    memoI.value = memoI.value ? (memoI.value + '\n' + text) : text;
+    ocrStatus.textContent = 'OCR完了 ✅';
+  } catch (e) {
+    console.error(e);
+    ocrStatus.textContent = 'OCR失敗 🥲';
+    alert('OCRでエラー。写真が暗い/傾きが強いと失敗しやすいです');
+  }
+};
+
+// 画像縮小＆モノクロ化してDataURL化
+async function toPreprocessedDataURL(file, maxW=1600){
+  const img = await fileToImage(file);
+  const scale = Math.min(1, maxW / img.width);
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
+  const cvs = document.createElement('canvas');
+  cvs.width = w; cvs.height = h;
+  const ctx = cvs.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+  // 簡易2値化（コントラスト強め）
+  const id = ctx.getImageData(0,0,w,h);
+  const a = id.data;
+  for(let i=0;i<a.length;i+=4){
+    const y = 0.299*a[i] + 0.587*a[i+1] + 0.114*a[i+2];
+    const v = y > 180 ? 255 : 0; // 閾値は必要に応じて調整
+    a[i]=a[i+1]=a[i+2]=v;
+  }
+  ctx.putImageData(id,0,0);
+  return cvs.toDataURL('image/png');
+}
+function fileToImage(file){
+  return new Promise((res, rej)=>{
+    const r = new FileReader();
+    r.onload = () => { const img = new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=r.result; };
+    r.onerror = rej; r.readAsDataURL(file);
+  });
+}
+
+// 金額抽出ロジック（まず「合計/お支払/現計」近傍、なければ金額の最大値）
+function pickAmount(text){
+  const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  const yenRegex = /([¥￥]?\s*\d[\d,]*)/g;
+  const hotWords = /(合計|お支払|現計|お会計|総計|支払|計)/;
+
+  // 近傍探索
+  for (const ln of lines) {
+    if (hotWords.test(ln)) {
+      const m = [...ln.matchAll(yenRegex)].map(x=>x[1]);
+      const val = normalizeMax(m);
+      if (val) return val;
+    }
+  }
+  // 全体から最大金額
+  const all = [...text.matchAll(yenRegex)].map(x=>x[1]);
+  return normalizeMax(all);
+}
+function normalizeMax(arr){
+  const nums = arr
+    .map(s => Number(String(s).replace(/[^\d]/g,'')))
+    .filter(n => isFinite(n) && n>0);
+  if (!nums.length) return null;
+  // 現実的な範囲（例：1円～100万円）を通す
+  const cand = nums.filter(n=> n>=1 && n<=1_000_000);
+  const max = (cand.length? cand:nums).reduce((a,b)=>Math.max(a,b),0);
+  return String(max);
+}
+
+
 dateI.value = selectedDate;
 
 // PWA SW
@@ -160,3 +259,4 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
