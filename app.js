@@ -1,5 +1,5 @@
 // ====== storage helpers ======
-const KEY = 'entries_v1'; // [{id,date,amount,cat,memo,ts}]
+const KEY = 'entries_v1';
 const load = () => JSON.parse(localStorage.getItem(KEY) || '[]');
 const saveAll = (a) => localStorage.setItem(KEY, JSON.stringify(a));
 
@@ -28,14 +28,16 @@ const ocrStatus = document.getElementById('ocrStatus');
 ocrBtn.onclick = async () => {
   const file = receiptI.files && receiptI.files[0];
   if (!file) return alert('レシート画像を選んでね');
+  if (typeof Tesseract === 'undefined') return alert('OCRライブラリの読込に失敗しました。再読み込みしてね。');
 
   try {
+    ocrBtn.disabled = true;
     ocrStatus.textContent = '前処理中...';
 
-    // 1) 画像を縮小＆白黒化（精度/速度UPのため）
-    const dataURL = await toPreprocessedDataURL(file, 1600); // 最大幅1600px
+    // 1) 画像を縮小＆2値化（暗めに少し強く）
+    const dataURL = await toPreprocessedDataURL(file, 1600, 165);
 
-    // 2) OCR実行
+    // 2) OCR
     ocrStatus.textContent = 'OCR実行中...';
     const { data } = await Tesseract.recognize(dataURL, 'jpn', {
       logger: m => {
@@ -45,23 +47,22 @@ ocrBtn.onclick = async () => {
       }
     });
 
-    const text = data.text || '';
-    // 3) 金額候補の抽出（合計/お支払/現計 などを優先）
+    const text = (data && data.text) ? data.text : '';
     const amount = pickAmount(text);
     if (amount) amountI.value = amount;
-
-    // 4) 全文はメモへ
     memoI.value = memoI.value ? (memoI.value + '\n' + text) : text;
     ocrStatus.textContent = 'OCR完了 ✅';
   } catch (e) {
     console.error(e);
     ocrStatus.textContent = 'OCR失敗 🥲';
-    alert('OCRでエラー。写真が暗い/傾きが強いと失敗しやすいです');
+    alert('OCRでエラー。明るい場所で、正面から大きめに撮ると精度が上がります。');
+  } finally {
+    ocrBtn.disabled = false;
   }
 };
 
-// 画像縮小＆モノクロ化してDataURL化
-async function toPreprocessedDataURL(file, maxW=1600){
+// 画像縮小＆モノクロ化
+async function toPreprocessedDataURL(file, maxW=1600, thresh=165){
   const img = await fileToImage(file);
   const scale = Math.min(1, maxW / img.width);
   const w = Math.max(1, Math.round(img.width * scale));
@@ -70,12 +71,11 @@ async function toPreprocessedDataURL(file, maxW=1600){
   cvs.width = w; cvs.height = h;
   const ctx = cvs.getContext('2d');
   ctx.drawImage(img, 0, 0, w, h);
-  // 簡易2値化（コントラスト強め）
   const id = ctx.getImageData(0,0,w,h);
   const a = id.data;
   for(let i=0;i<a.length;i+=4){
     const y = 0.299*a[i] + 0.587*a[i+1] + 0.114*a[i+2];
-    const v = y > 180 ? 255 : 0; // 閾値は必要に応じて調整
+    const v = y > thresh ? 255 : 0; // 閾値
     a[i]=a[i+1]=a[i+2]=v;
   }
   ctx.putImageData(id,0,0);
@@ -89,13 +89,12 @@ function fileToImage(file){
   });
 }
 
-// 金額抽出ロジック（まず「合計/お支払/現計」近傍、なければ金額の最大値）
+// 金額抽出
 function pickAmount(text){
   const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   const yenRegex = /([¥￥]?\s*\d[\d,]*)/g;
-  const hotWords = /(合計|お支払|現計|お会計|総計|支払|計)/;
+  const hotWords = /(合計|合計金額|お支払|お支払い|現計|お会計|総計|税込|小計|計)/;
 
-  // 近傍探索
   for (const ln of lines) {
     if (hotWords.test(ln)) {
       const m = [...ln.matchAll(yenRegex)].map(x=>x[1]);
@@ -103,7 +102,6 @@ function pickAmount(text){
       if (val) return val;
     }
   }
-  // 全体から最大金額
   const all = [...text.matchAll(yenRegex)].map(x=>x[1]);
   return normalizeMax(all);
 }
@@ -112,12 +110,10 @@ function normalizeMax(arr){
     .map(s => Number(String(s).replace(/[^\d]/g,'')))
     .filter(n => isFinite(n) && n>0);
   if (!nums.length) return null;
-  // 現実的な範囲（例：1円～100万円）を通す
   const cand = nums.filter(n=> n>=1 && n<=1_000_000);
   const max = (cand.length? cand:nums).reduce((a,b)=>Math.max(a,b),0);
   return String(max);
 }
-
 
 dateI.value = selectedDate;
 
@@ -125,7 +121,7 @@ dateI.value = selectedDate;
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
 
 // ====== utils ======
-function toISO(d){ // yyyy-mm-dd in local
+function toISO(d){
   const y=d.getFullYear(), m=d.getMonth()+1, dd=d.getDate();
   return `${y}-${String(m).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
 }
@@ -150,27 +146,22 @@ function renderCalendar(){
     map.set(e.date, m);
   }
 
-  // cells: 42 (6 weeks)
   const cells = [];
-  // prev month padding
   for(let i=startDow-1;i>=0;i--){
     const d = prevDays - i;
     const dt = toISO(new Date(viewY, viewM-1, d));
     cells.push({d, dt, off:true});
   }
-  // current month
   for(let d=1; d<=daysInMonth; d++){
     const dt = toISO(new Date(viewY, viewM, d));
     cells.push({d, dt, off:false});
   }
-  // next padding
   while(cells.length%7) {
     const d = cells.length - (startDow + daysInMonth) + 1;
     const dt = toISO(new Date(viewY, viewM+1, d));
     cells.push({d, dt, off:true});
   }
 
-  // draw
   let monthTotal = 0;
   for(const cell of cells){
     const div = document.createElement('div');
@@ -216,7 +207,6 @@ function renderList(){
       </div>`;
     listEl.appendChild(row);
   }
-  // wire delete
   listEl.querySelectorAll('.del').forEach(btn=>{
     btn.onclick = () => {
       const id = btn.getAttribute('data-id');
