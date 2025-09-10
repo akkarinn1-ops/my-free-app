@@ -1,4 +1,4 @@
-const CACHE = 'v2-2025-09-10'; // ← ここを更新すると強制リフレッシュ
+const CACHE = 'v3-ocr-2025-09-10'; // ←適当に新しい名前に
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -6,7 +6,7 @@ self.addEventListener('install', (e) => {
       c.addAll(['./','./index.html','./app.js','./manifest.webmanifest'])
     )
   );
-  self.skipWaiting(); // 新SWを即座に有効化
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
@@ -15,7 +15,7 @@ self.addEventListener('activate', (e) => {
       Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
     )
   );
-  self.clients.claim(); // 既存タブにも新SWを適用
+  self.clients.claim();
 });
 
 self.addEventListener('fetch', (e) => {
