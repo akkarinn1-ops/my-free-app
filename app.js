@@ -2,6 +2,12 @@
 const KEY = 'entries_v1';
 const load = () => JSON.parse(localStorage.getItem(KEY) || '[]');
 const saveAll = (a) => localStorage.setItem(KEY, JSON.stringify(a));
+const VERSION = '2025.09.11-02';  // ←編集のたび更新
+console.log('APP VERSION', VERSION);
+window.addEventListener('DOMContentLoaded', () => {
+  const v = document.getElementById('ver');
+  if (v) v.textContent = VERSION;
+});
 
 // ====== state ======
 let today = new Date();
@@ -278,3 +284,4 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
