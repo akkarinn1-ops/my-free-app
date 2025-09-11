@@ -106,6 +106,89 @@ function normalizeJP(s){
     .replace(/\s+(?=\d)/g,'');
 }
 
+// 金額候補（総額＆税）・L・単価(@)をまとめて抽出
+function smartExtract(text){
+  const s = normalizeJP(text);
+  const lines = s.split(/\r?\n/).map(t=>t.trim()).filter(Boolean);
+
+  // ===== 数字の取り出し（円つき・円なし両方） =====
+  const yenRe  = /([¥￥]?\s*\d[\d\s,．｡・･'’`´\-]*\d)\s*円/gi;
+  const numRe  = /[¥￥]?\s*\d[\d\s,．｡・･'’`´\-]*\d/gi;
+  const toInt  = v => Number(String(v).replace(/[^\d]/g,''));     // 金額用（整数）
+  const toNum  = v => Number(String(v).replace(/[^0-9.]/g,''));   // 小数あり
+
+  // 行→金額候補
+  const amounts = []; // {val, line, isYen, isTotalHint, isTaxHint}
+  for (const ln of lines){
+    const isTotalHint = /(合計|合計金額|総計|お支払|お支払い|現計)/.test(ln);
+    const isTaxHint   = /(税|消費|税込|内)/.test(ln);
+    // 円つき
+    for (const m of ln.matchAll(yenRe)){
+      const v = toInt(m[1]);
+      if (v>=100 && v<=100000){
+        amounts.push({val:v, line:ln, isYen:true, isTotalHint, isTaxHint});
+      }
+    }
+    // 円なし（保険）
+    for (const m of ln.matchAll(numRe)){
+      const v = toInt(m[0]);
+      if (v>=100 && v<=100000){
+        amounts.push({val:v, line:ln, isYen:false, isTotalHint, isTaxHint});
+      }
+    }
+  }
+
+  // ===== L/単価(@) =====
+  // 33.96L / 33.96 ℓ / 33.96 l
+  let liters = null;
+  const lMatch = s.match(/(\d{1,3}(?:\.\d{1,2})?)\s*(?:L|ℓ|l)\b/i);
+  if (lMatch) liters = toNum(lMatch[1]);
+
+  // @163.0 / 単価 163.0 / 163.0円/L
+  let unit = null;
+  const uMatch = s.match(/[@＠]\s*(\d{2,4}(?:\.\d{1,2})?)\b|\b単価\s*[:：]?\s*(\d{2,4}(?:\.\d{1,2})?)\b|\b(\d{2,4}(?:\.\d{1,2})?)\s*円\s*\/?\s*(?:L|ℓ|l)\b/i);
+  if (uMatch) unit = toNum(uMatch[1]||uMatch[2]||uMatch[3]);
+
+  // ===== 総額を決める =====
+  // 1) 合計系ヒント行の“最大”を最優先（かつ Taxヒント除外）
+  const totalHinted = amounts
+    .filter(a => a.isTotalHint && !/税|内|消費|税込|小計/.test(a.line))
+    .sort((a,b)=>b.val-a.val);
+  if (totalHinted.length) return { total: totalHinted[0].val, tax: guessTax(totalHinted[0].val), liters, unit };
+
+  // 2) 「税」ヒントがある金額と、≒×11 の関係にある総額のペアを探す
+  const taxes = amounts.filter(a => a.isTaxHint).map(a=>a.val);
+  let best = null; let bestErr = 1e9;
+  for (const t of taxes){
+    for (const a of amounts){
+      if (a.val <= t) continue;
+      const expect = t*11;                 // 10%税 → 総額≒税×11
+      const err = Math.abs(a.val - expect);
+      const rel = err / expect;
+      if ((err <= 30 || rel <= 0.02) && err < bestErr){ // ±30円 or 2%以内
+        best = a; bestErr = err;
+      }
+    }
+  }
+  if (best) return { total: best.val, tax: Math.round(best.val/11), liters, unit };
+
+  // 3) 「円で終わる」金額の最大
+  const yenOnly = amounts.filter(a=>a.isYen).sort((a,b)=>b.val-a.val);
+  if (yenOnly.length) return { total: yenOnly[0].val, tax: guessTax(yenOnly[0].val), liters, unit };
+
+  // 4) ぜんぶダメなら全候補の最大
+  const all = amounts.sort((a,b)=>b.val-a.val);
+  if (all.length) return { total: all[0].val, tax: guessTax(all[0].val), liters, unit };
+
+  return { total: null, tax: null, liters, unit };
+}
+
+// 総額→税の見積（10%）
+function guessTax(total){
+  if (!total) return null;
+  return Math.round(total/11);
+}
+
 // 100円〜10万円の範囲に絞って最大値を返す（範囲外は無視）
 function normalizeMax(arr){
   const nums = arr
@@ -306,6 +389,7 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
 
