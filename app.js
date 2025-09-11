@@ -27,6 +27,8 @@ const catI = document.getElementById('cat');
 const memoI = document.getElementById('memo');
 const listEl = document.getElementById('list');
 const selTitle = document.getElementById('selTitle');
+const litersI = document.getElementById('liters');
+const unitI   = document.getElementById('unit');
 
 // ---- OCR（Tesseract.js） ----
 const receiptI = document.getElementById('receipt');
@@ -396,6 +398,7 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
 
