@@ -106,34 +106,38 @@ function normalizeJP(s){
     .replace(/\s+(?=\d)/g,'');
 }
 
+// 100円〜10万円の範囲に絞って最大値を返す（範囲外は無視）
+function normalizeMax(arr){
+  const nums = arr
+    .map(s => Number(String(s).replace(/[^\d]/g,'')))
+    .filter(n => Number.isFinite(n) && n > 0);
+  if (!nums.length) return null;
+  const cand = nums.filter(n => n >= 100 && n <= 100000);
+  const use = cand.length ? cand : nums; // 全滅なら一応最大
+  return String(use.reduce((a,b)=>Math.max(a,b), 0));
+}
+
 function pickAmount(text){
   const normText = normalizeJP(text);
   const lines = normText.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
 
-  const yenRegex = /([¥￥]?\s*\d[\d,]*)/g;
+  const yenAny = /([¥￥]?\s*\d[\d,]*)/g;
   const hotWords = /(合計|合計金額|お支払|お支払い|総計|現計|計)/;
+  const excludeWords = /(税|内|消費|税込|小計)/; // ←「内消費税 503円」などを弾く
 
+  // 1) 「合計」系の行を最優先（その行の“最大金額”を採用）
   for (const ln of lines) {
-    if (hotWords.test(ln)) {
-      const m = [...ln.matchAll(yenRegex)]
-        .map(x=>x[1])
-        .map(s => Number(String(s).replace(/[^\d]/g,'')))
-        .filter(n => isFinite(n) && n >= 100);  // 3桁以上のみ
-      if (m.length) {
-        return String(Math.max(...m));  // ←一番大きい金額を取る
-      }
+    if (hotWords.test(ln) && !excludeWords.test(ln)) {
+      const cand = [...ln.matchAll(yenAny)].map(m => m[1]);
+      const val = normalizeMax(cand); // 100〜100000円の範囲で最大
+      if (val) return val;
     }
   }
 
-  // 全文から最大値
-  const all = [...normText.matchAll(yenRegex)]
-    .map(x=>x[1])
-    .map(s => Number(String(s).replace(/[^\d]/g,'')))
-    .filter(n => isFinite(n) && n >= 100);
-  if (!all.length) return null;
-  return String(Math.max(...all));
+  // 2) それでもダメなら、全文から範囲内の最大金額
+  const all = [...normText.matchAll(yenAny)].map(m => m[1]);
+  return normalizeMax(all);
 }
-
 
 // PWA SW
 if ('serviceWorker' in navigator) {
@@ -293,6 +297,7 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
 
