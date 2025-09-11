@@ -93,18 +93,23 @@ function fileToImage(file){
 function pickAmount(text){
   const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   const yenRegex = /([¥￥]?\s*\d[\d,]*)/g;
-  const hotWords = /(合計|お支払|現計|お会計|総計|支払|計)/;
+  const hotWords = /(合計|お支払|総計|現計|計)/;
 
-  // 近傍探索
+  // 「合計」などの近くの金額を優先（3桁以上の数字だけ）
   for (const ln of lines) {
     if (hotWords.test(ln)) {
-      const m = [...ln.matchAll(yenRegex)].map(x=>x[1]);
+      const m = [...ln.matchAll(yenRegex)]
+        .map(x=>x[1])
+        .filter(v => String(v).replace(/[^\d]/g,'').length >= 3);
       const val = normalizeMax(m);
       if (val) return val;
     }
   }
-  // 全体から最大金額
-  const all = [...text.matchAll(yenRegex)].map(x=>x[1]);
+
+  // 全体から3桁以上の最大金額を探す
+  const all = [...text.matchAll(yenRegex)]
+    .map(x=>x[1])
+    .filter(v => String(v).replace(/[^\d]/g,'').length >= 3);
   return normalizeMax(all);
 }
 function normalizeMax(arr){
@@ -251,5 +256,6 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
