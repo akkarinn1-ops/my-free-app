@@ -2,7 +2,9 @@
 const KEY = 'entries_v1';
 const load = () => JSON.parse(localStorage.getItem(KEY) || '[]');
 const saveAll = (a) => localStorage.setItem(KEY, JSON.stringify(a));
-const VERSION = '2025.09.11-02';  // ←編集のたび更新
+
+// ====== version ======
+const VERSION = '2025.09.11-02';  // ←更新のたびに数字を変える
 console.log('APP VERSION', VERSION);
 window.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('ver');
@@ -40,15 +42,13 @@ ocrBtn.onclick = async () => {
     ocrBtn.disabled = true;
     ocrStatus.textContent = '前処理中...';
 
-    // 1) 画像を縮小＆2値化（暗めに少し強く）
     const dataURL = await toPreprocessedDataURL(file, 1600, 165);
 
-    // 2) OCR
     ocrStatus.textContent = 'OCR実行中...';
     const { data } = await Tesseract.recognize(dataURL, 'jpn', {
       logger: m => {
         if (m.status && m.progress != null) {
-          ocrStatus.textContent = `${m.status} ${(m.progress * 100 | 0)}%`;
+          ocrStatus.textContent = `${m.status} ${(m.progress*100|0)}%`;
         }
       }
     });
@@ -61,19 +61,18 @@ ocrBtn.onclick = async () => {
       ? `OCR完了 ✅ 金額候補: ¥${amount}`
       : 'OCR完了 ✅（金額見つからず）';
 
-    // OCR全文はメモに追記
     memoI.value = memoI.value ? (memoI.value + '\n' + text) : text;
   } catch (e) {
     console.error(e);
     ocrStatus.textContent = 'OCR失敗 🥲';
-    alert('OCRでエラー。明るい場所で、正面から大きめに撮ると精度が上がります。');
+    alert('OCRでエラー。明るい場所で正面から撮影すると精度が上がります。');
   } finally {
     ocrBtn.disabled = false;
   }
 };
 
-// 画像縮小＆モノクロ化（単純二値化）
-async function toPreprocessedDataURL(file, maxW = 1600, thresh = 165) {
+// 画像前処理
+async function toPreprocessedDataURL(file, maxW=1600, thresh=165){
   const img = await fileToImage(file);
   const scale = Math.min(1, maxW / img.width);
   const w = Math.max(1, Math.round(img.width * scale));
@@ -82,85 +81,96 @@ async function toPreprocessedDataURL(file, maxW = 1600, thresh = 165) {
   cvs.width = w; cvs.height = h;
   const ctx = cvs.getContext('2d');
   ctx.drawImage(img, 0, 0, w, h);
-  const id = ctx.getImageData(0, 0, w, h);
+  const id = ctx.getImageData(0,0,w,h);
   const a = id.data;
-  for (let i = 0; i < a.length; i += 4) {
-    const y = 0.299 * a[i] + 0.587 * a[i + 1] + 0.114 * a[i + 2];
-    const v = y > thresh ? 255 : 0; // 閾値
-    a[i] = a[i + 1] = a[i + 2] = v;
+  for(let i=0;i<a.length;i+=4){
+    const y = 0.299*a[i] + 0.587*a[i+1] + 0.114*a[i+2];
+    const v = y > thresh ? 255 : 0;
+    a[i]=a[i+1]=a[i+2]=v;
   }
-  ctx.putImageData(id, 0, 0);
+  ctx.putImageData(id,0,0);
   return cvs.toDataURL('image/png');
 }
-function fileToImage(file) {
-  return new Promise((res, rej) => {
+function fileToImage(file){
+  return new Promise((res, rej)=>{
     const r = new FileReader();
-    r.onload = () => { const img = new Image(); img.onload = () => res(img); img.onerror = rej; img.src = r.result; };
+    r.onload = () => { const img = new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=r.result; };
     r.onerror = rej; r.readAsDataURL(file);
   });
 }
 
-// ====== 金額抽出（正規化 + 「円」優先 + 3桁未満除外）======
-function normalizeJP(s) {
-  return (s || '')
-    .normalize('NFKC')        // ５,５３５ → 5,535 / ￥ → ¥
-    .replace(/\s+(?=\d)/g, ''); // 数字直前の余計な空白を除去
+// 全角→半角 + 数字直前の空白除去
+function normalizeJP(s){
+  return (s||'')
+    .normalize('NFKC')
+    .replace(/\s+(?=\d)/g,'');
 }
 
-function pickAmount(text) {
+// 金額抽出
+function pickAmount(text){
   const normText = normalizeJP(text);
-  const lines = normText.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const lines = normText.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
 
-  const yenAfter = /([¥￥]?\s*\d[\d,]*)\s*円/g; // 「円」付き
-  const yenAny = /([¥￥]?\s*\d[\d,]*)/g;       // どれでも
-  const is3digits = v => String(v).replace(/[^\d]/g, '').length >= 3;
-  const toNum = v => Number(String(v).replace(/[^\d]/g, ''));
+  const yenAfter = /([¥￥]?\s*\d[\d,]*)\s*円/g;
+  const yenAny = /([¥￥]?\s*\d[\d,]*)/g;
+  const is3digits = v => String(v).replace(/[^\d]/g,'').length >= 3;
+  const toNum = v => Number(String(v).replace(/[^\d]/g,''));
 
-  // 1) 合計行を最優先（まず「円」付き、なければ通常）
   const hot = /(合計|合計金額|お支払|お支払い|総計|現計|計)/;
   for (const ln of lines) {
     if (hot.test(ln)) {
-      const c1 = [...ln.matchAll(yenAfter)].map(m => m[1]).filter(is3digits);
+      const c1 = [...ln.matchAll(yenAfter)].map(m=>m[1]).filter(is3digits);
       if (c1.length) return String(Math.max(...c1.map(toNum)));
 
-      const c2 = [...ln.matchAll(yenAny)].map(m => m[1]).filter(is3digits);
+      const c2 = [...ln.matchAll(yenAny)].map(m=>m[1]).filter(is3digits);
       if (c2.length) return String(Math.max(...c2.map(toNum)));
     }
   }
 
-  // 2) 全文の「円」付き（末尾の方が合計になりがちなので末尾優先）
-  const allYenAfter = [...normText.matchAll(yenAfter)].map(m => m[1]).filter(is3digits);
+  const allYenAfter = [...normText.matchAll(yenAfter)].map(m=>m[1]).filter(is3digits);
   if (allYenAfter.length) return String(allYenAfter.map(toNum).pop());
 
-  // 3) 最後の手段：全文から3桁以上の最大値
-  const allNums = [...normText.matchAll(yenAny)].map(m => m[1]).filter(is3digits);
+  const allNums = [...normText.matchAll(yenAny)].map(m=>m[1]).filter(is3digits);
   if (allNums.length) return String(Math.max(...allNums.map(toNum)));
 
   return null;
 }
 
-// （フォールバックとして残す：他でも使える）
-function normalizeMax(arr) {
-  const nums = arr
-    .map(s => Number(String(s).replace(/[^\d]/g, '')))
-    .filter(n => isFinite(n) && n > 0);
-  if (!nums.length) return null;
-  const cand = nums.filter(n => n >= 1 && n <= 1_000_000);
-  const max = (cand.length ? cand : nums).reduce((a, b) => Math.max(a, b), 0);
-  return String(max);
+// PWA SW
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js');
+
+  // 新バージョン通知を受け取る
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data?.type === 'NEW_SW_ACTIVATED') {
+      const el = document.getElementById('ocrStatus');
+      if (el) el.textContent = `新バージョン準備OK → 画面を再読み込みで適用（${e.data.version}）`;
+    }
+  });
 }
 
-dateI.value = selectedDate;
-
-// PWA SW
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+// 強制更新ボタン
+document.getElementById('forceReload').onclick = async () => {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } finally {
+    location.reload();
+  }
+};
 
 // ====== utils ======
-function toISO(d) {
-  const y = d.getFullYear(), m = d.getMonth() + 1, dd = d.getDate();
-  return `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+function toISO(d){
+  const y=d.getFullYear(), m=d.getMonth()+1, dd=d.getDate();
+  return `${y}-${String(m).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
 }
-function fmtJPY(n) { return Number(n).toLocaleString('ja-JP'); }
+function fmtJPY(n){ return Number(n).toLocaleString('ja-JP'); }
 
 // ====== calendar render ======
 function renderCalendar() {
@@ -284,4 +294,5 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
