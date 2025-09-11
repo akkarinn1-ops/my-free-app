@@ -84,6 +84,18 @@ ocrBtn.onclick = async () => {
     if (ext.liters!=null) bits.push(`${ext.liters}L`);
     if (ext.unit!=null) bits.push(`@${ext.unit}円/L`);
     if (ext.date) bits.push(ext.date);
+    const amtEl = amountI;
+    const litEl = litersI;
+    const uniEl = unitI;
+    
+    const amt = Number(amtEl?.value || 0);
+    const lit = Number(litEl?.value || 0);
+    const uni = Number(uniEl?.value || 0);
+    
+    if (!amt && lit && uni) amtEl.value = String(Math.round(lit * uni));
+    if (!uni && amt && lit) uniEl.value = String(+(amt / lit).toFixed(1));
+    if (!lit && amt && uni) litEl.value = String(+(amt / uni).toFixed(2));
+
     ocrStatus.textContent = `OCR完了 ✅ ${bits.join(' / ') || '（候補なし）'}`;
   } catch (e) {
     console.error(e);
@@ -404,6 +416,7 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
 
