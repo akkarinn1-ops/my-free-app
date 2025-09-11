@@ -106,35 +106,34 @@ function normalizeJP(s){
     .replace(/\s+(?=\d)/g,'');
 }
 
-// 金額抽出
 function pickAmount(text){
   const normText = normalizeJP(text);
   const lines = normText.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
 
-  const yenAfter = /([¥￥]?\s*\d[\d,]*)\s*円/g;
-  const yenAny = /([¥￥]?\s*\d[\d,]*)/g;
-  const is3digits = v => String(v).replace(/[^\d]/g,'').length >= 3;
-  const toNum = v => Number(String(v).replace(/[^\d]/g,''));
+  const yenRegex = /([¥￥]?\s*\d[\d,]*)/g;
+  const hotWords = /(合計|合計金額|お支払|お支払い|総計|現計|計)/;
 
-  const hot = /(合計|合計金額|お支払|お支払い|総計|現計|計)/;
   for (const ln of lines) {
-    if (hot.test(ln)) {
-      const c1 = [...ln.matchAll(yenAfter)].map(m=>m[1]).filter(is3digits);
-      if (c1.length) return String(Math.max(...c1.map(toNum)));
-
-      const c2 = [...ln.matchAll(yenAny)].map(m=>m[1]).filter(is3digits);
-      if (c2.length) return String(Math.max(...c2.map(toNum)));
+    if (hotWords.test(ln)) {
+      const m = [...ln.matchAll(yenRegex)]
+        .map(x=>x[1])
+        .map(s => Number(String(s).replace(/[^\d]/g,'')))
+        .filter(n => isFinite(n) && n >= 100);  // 3桁以上のみ
+      if (m.length) {
+        return String(Math.max(...m));  // ←一番大きい金額を取る
+      }
     }
   }
 
-  const allYenAfter = [...normText.matchAll(yenAfter)].map(m=>m[1]).filter(is3digits);
-  if (allYenAfter.length) return String(allYenAfter.map(toNum).pop());
-
-  const allNums = [...normText.matchAll(yenAny)].map(m=>m[1]).filter(is3digits);
-  if (allNums.length) return String(Math.max(...allNums.map(toNum)));
-
-  return null;
+  // 全文から最大値
+  const all = [...normText.matchAll(yenRegex)]
+    .map(x=>x[1])
+    .map(s => Number(String(s).replace(/[^\d]/g,'')))
+    .filter(n => isFinite(n) && n >= 100);
+  if (!all.length) return null;
+  return String(Math.max(...all));
 }
+
 
 // PWA SW
 if ('serviceWorker' in navigator) {
@@ -294,5 +293,6 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
