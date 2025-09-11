@@ -371,16 +371,30 @@ function escapeHTML(s) { return s.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<':
 document.getElementById('prev').onclick = () => { if (viewM === 0) { viewM = 11; viewY--; } else viewM--; renderCalendar(); };
 document.getElementById('next').onclick = () => { if (viewM === 11) { viewM = 0; viewY++; } else viewM++; renderCalendar(); };
 
-document.getElementById('save').onclick = () => {
-  const date = dateI.value || toISO(new Date());
-  const amount = Number(amountI.value || 0);
-  if (!amount) { alert('金額が空です'); return; }
-  const cat = catI.value || 'その他';
+document.getElementById('save').onclick = ()=>{
+  const date   = dateI.value || toISO(new Date());
+  let amount   = Number(amountI.value||0);
+  let liters   = litersI ? Number(litersI.value||0) : 0;
+  let unit     = unitI   ? Number(unitI.value||0)   : 0;
+  if (!amount && !liters && !unit){ alert('金額かLか単価のいずれかを入れてね'); return; }
+
+  // どれか欠けてれば計算（2つ揃えば3つ目を求める）
+  if (!amount && liters && unit) amount = Math.round(liters * unit);
+  if (!unit   && liters && amount) unit = +(amount / liters).toFixed(1);
+  if (!liters && unit && amount)  liters = +(amount / unit).toFixed(2);
+
+  const cat  = catI.value || 'その他';
   const memo = memoI.value || '';
-  const arr = load();
-  arr.push({ id: Date.now() + '' + Math.random().toString(16).slice(2), date, amount, cat, memo, ts: Date.now() });
+  const arr  = load();
+  arr.push({
+    id: Date.now()+''+Math.random().toString(16).slice(2),
+    date, amount, cat, memo, ts: Date.now(),
+    liters, unit         // ← 追加保存
+  });
   saveAll(arr);
-  amountI.value = ''; memoI.value = '';
+  amountI.value=''; memoI.value='';
+  if (litersI) litersI.value='';
+  if (unitI)   unitI.value='';
   selectedDate = date;
   renderCalendar(); renderList();
 };
@@ -398,6 +412,7 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
 
