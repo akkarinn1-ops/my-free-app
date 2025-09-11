@@ -1,4 +1,4 @@
-const CACHE = 'v3-2025-09-11'; // ←適当に新しい名前に
+const CACHE = 'v4-2025-09-11'; // ←適当に新しい名前に
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -21,6 +21,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   e.respondWith(caches.match(e.request).then((r) => r || fetch(e.request)));
 });
+
 
 
 
