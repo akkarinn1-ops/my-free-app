@@ -27,9 +27,11 @@ const catI = document.getElementById('cat');
 const memoI = document.getElementById('memo');
 const listEl = document.getElementById('list');
 const selTitle = document.getElementById('selTitle');
-// あるかもしれない拡張フィールド（無ければundefinedでOK）
+
+// ★ 追加：数量Lと単価@円/L
 const litersI = document.getElementById('liters');
 const unitI   = document.getElementById('unit');
+
 
 // ---- OCR（Tesseract.js） ----
 const receiptI = document.getElementById('receipt');
@@ -294,16 +296,82 @@ function renderCalendar() {
   const prevDays = new Date(viewY, viewM, 0).getDate();
 
   const entries = load();
-  const map = new Map(); // dateStr -> {sum, cnt}
-  const entries = load();
-  const map = new Map(); // dateStr -> {sum, cnt, lit}
+  // date -> 集計オブジェクト
+  const map = new Map();
   for (const e of entries) {
-    const m = map.get(e.date) || { sum:0, cnt:0, lit:0 };
-    m.sum += Number(e.amount)||0;
+    const m = map.get(e.date) || { sum:0, cnt:0, lit:0, unitSum:0, unitCnt:0 };
+    m.sum += Number(e.amount) || 0;
     m.cnt += 1;
-    m.lit += Number(e.liters)||0;   // ★ 追加
+    if (e && e.liters != null && !Number.isNaN(Number(e.liters))) {
+      m.lit += Number(e.liters);
+    }
+    if (e && e.unit != null && !Number.isNaN(Number(e.unit))) {
+      m.unitSum += Number(e.unit);
+      m.unitCnt += 1;
+    }
     map.set(e.date, m);
   }
+
+  // 表示用セル配列
+  const cells = [];
+  for (let i = startDow - 1; i >= 0; i--) {
+    const d = prevDays - i;
+    const dt = toISO(new Date(viewY, viewM - 1, d));
+    cells.push({ d, dt, off: true });
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dt = toISO(new Date(viewY, viewM, d));
+    cells.push({ d, dt, off: false });
+  }
+  while (cells.length % 7) {
+    const d = cells.length - (startDow + daysInMonth) + 1;
+    const dt = toISO(new Date(viewY, viewM + 1, d));
+    cells.push({ d, dt, off: true });
+  }
+
+  // 月合計
+  let monthTotal = 0;
+  let monthLit   = 0;
+
+  for (const cell of cells) {
+    const div = document.createElement('div');
+    div.className = 'day' + (cell.off ? ' off' : '');
+    if (cell.dt === selectedDate) div.classList.add('selected');
+
+    const m = map.get(cell.dt);
+    const sum = m ? m.sum : 0;
+    const cnt = m ? m.cnt : 0;
+    const lit = m ? m.lit : 0;
+
+    // その日の平均@円/L（単価入力が無い場合は 合計/合計L で概算）
+    const avgUnit =
+      m && m.unitCnt > 0 ? Math.round(m.unitSum / m.unitCnt)
+      : (lit > 0 ? Math.round(sum / lit) : null);
+
+    if (!cell.off) {
+      monthTotal += sum;
+      monthLit   += lit;
+    }
+
+    div.innerHTML = `
+      <div class="d">${cell.d}</div>
+      ${sum ? `<div class="sum">¥${fmtJPY(sum)}</div>` : ''}
+      ${lit ? `<div class="cnt">${lit.toFixed(1)}L${avgUnit != null ? ` @${avgUnit}円` : ''}</div>` : (cnt ? `<div class="cnt">${cnt}件</div>` : '')}
+    `;
+    div.onclick = () => {
+      selectedDate = cell.dt;
+      dateI.value = selectedDate;
+      renderCalendar();
+      renderList();
+    };
+    grid.appendChild(div);
+  }
+
+  const monthAvgUnit = monthLit > 0 ? Math.round(monthTotal / monthLit) : null;
+  monthSum.textContent =
+    `この月の合計: ¥${fmtJPY(monthTotal)}`
+    + (monthLit > 0 ? `（${monthLit.toFixed(1)}L${monthAvgUnit!=null ? ` @${monthAvgUnit}円/L` : ''}）` : '');
+}
 
 
   const cells = [];
@@ -370,19 +438,17 @@ function renderList() {
     const row = document.createElement('div');
     row.className = 'item';
     row.innerHTML = `
-  <div class="left">
-    <div>
-      <span class="amt">¥${fmtJPY(it.amount)}</span> / ${it.cat}
-      ${ (it.liters ? ` ・ ${(+it.liters).toFixed(2)}L` : '') }
-      ${ (it.unit   ? ` ・ @${(+it.unit).toFixed(1)}円/L` : '') }
-    </div>
-    <div class="muted">
-      ${new Date(it.ts).toLocaleTimeString()} - ${it.memo ? escapeHTML(it.memo) : ''}
-    </div>
-  </div>
-  <div class="right">
-    <button data-id="${it.id}" class="del">削除</button>
-  </div>`;
+      <div class="left">
+        <div>
+          <span class="amt">¥${fmtJPY(it.amount)}</span> / ${it.cat}
+          ${it.liters!=null ? ` ・ ${Number(it.liters).toFixed(1)}L` : ''}
+          ${it.unit!=null   ? ` @${Number(it.unit)}円/L` : ''}
+        </div>
+        <div class="muted">${new Date(it.ts).toLocaleTimeString()} - ${it.memo ? escapeHTML(it.memo) : ''}</div>
+      </div>
+      <div class="right">
+        <button data-id="${it.id}" class="del">削除</button>
+      </div>`;
 
     listEl.appendChild(row);
   }
@@ -398,39 +464,31 @@ function renderList() {
 function escapeHTML(s) { return s.replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
 
 // ====== actions ======
-document.getElementById('prev').onclick = () => { if (viewM === 0) { viewM = 11; viewY--; } else viewM--; renderCalendar(); };
-document.getElementById('next').onclick = () => { if (viewM === 11) { viewM = 0; viewY++; } else viewM++; renderCalendar(); };
-
 document.getElementById('save').onclick = () => {
   const date   = dateI.value || toISO(new Date());
   const amount = Number(amountI.value || 0);
   if (!amount) { alert('金額が空です'); return; }
+  const cat  = catI.value || 'その他';
+  const memo = memoI.value || '';
 
-  const cat    = catI.value || 'その他';
-  const memo   = memoI.value || '';
-
-  // ★ 追加: L と 単価（数値にしておく）
-  const liters = litersI ? Number(litersI.value || 0) : 0;
-  const unit   = unitI   ? Number(unitI.value   || 0) : 0;
+  // ★ 追加：L と 単価（数値化・無ければ null）
+  const liters = litersI && litersI.value !== '' ? Number(litersI.value) : null;
+  const unit   = unitI   && unitI.value   !== '' ? Number(unitI.value)   : null;
 
   const arr = load();
   arr.push({
     id: Date.now() + '' + Math.random().toString(16).slice(2),
     date, amount, cat, memo,
-    liters,         // ★追加
-    unit,           // ★追加
+    liters, unit,                            // ★追加
     ts: Date.now()
   });
   saveAll(arr);
 
-  amountI.value = '';
-  if (litersI) litersI.value = '';
-  if (unitI)   unitI.value   = '';
-  memoI.value  = '';
-
+  amountI.value=''; memoI.value='';
+  if (litersI) litersI.value='';
+  if (unitI)   unitI.value='';
   selectedDate = date;
-  renderCalendar();
-  renderList();
+  renderCalendar(); renderList();
 };
 
 document.getElementById('export').onclick = () => {
@@ -446,6 +504,7 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
 
