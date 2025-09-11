@@ -123,18 +123,27 @@ function pickAmount(text){
 
   const yenAny = /([¥￥]?\s*\d[\d,]*)/g;
   const hotWords = /(合計|合計金額|お支払|お支払い|総計|現計|計)/;
-  const excludeWords = /(税|内|消費|税込|小計)/; // ←「内消費税 503円」などを弾く
+  const excludeWords = /(税|内|消費|税込|小計|TEL|伝No|承認|番号)/; // ←ここ追加
 
-  // 1) 「合計」系の行を最優先（その行の“最大金額”を採用）
+  // 1) 「合計」系の行を最優先
   for (const ln of lines) {
     if (hotWords.test(ln) && !excludeWords.test(ln)) {
       const cand = [...ln.matchAll(yenAny)].map(m => m[1]);
-      const val = normalizeMax(cand); // 100〜100000円の範囲で最大
+      const val = normalizeMax(cand);
       if (val) return val;
     }
   }
 
-  // 2) それでもダメなら、全文から範囲内の最大金額
+  // 2) 「円」で終わる行から最大金額を探す（例：5,535円）
+  for (const ln of lines) {
+    if (ln.endsWith("円") && !excludeWords.test(ln)) {
+      const cand = [...ln.matchAll(yenAny)].map(m => m[1]);
+      const val = normalizeMax(cand);
+      if (val) return val;
+    }
+  }
+
+  // 3) 全文から最大金額
   const all = [...normText.matchAll(yenAny)].map(m => m[1]);
   return normalizeMax(all);
 }
@@ -297,6 +306,7 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
 
