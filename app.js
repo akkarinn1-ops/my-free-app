@@ -344,7 +344,7 @@ function renderCalendar() {
     div.innerHTML = `
       <div class="d">${cell.d}</div>
       ${sum ? `<div class="sum">¥${fmtJPY(sum)}</div>` : ''}
-      ${lit ? `<div class="cnt">${lit.toFixed(1)}L${avgUnit != null ? ` @${avgUnit}円` : ''}</div>` : (cnt ? `<div class="cnt">${cnt}件</div>` : '')}
+      ${lit ? `<div class="cnt">${lit.toFixed(2)}L${avgUnit != null ? ` @${avgUnit}円` : ''}</div>` : (cnt ? `<div class="cnt">${cnt}件</div>` : '')}
     `;
     div.onclick = () => { selectedDate = cell.dt; dateI.value = selectedDate; renderCalendar(); renderList(); };
     grid.appendChild(div);
@@ -353,7 +353,7 @@ function renderCalendar() {
   const monthAvgUnit = monthLit > 0 ? Math.round(monthTotal / monthLit) : null;
   monthSum.textContent =
     `この月の合計: ¥${fmtJPY(monthTotal)}` +
-    (monthLit > 0 ? `（${monthLit.toFixed(1)}L${monthAvgUnit!=null ? ` @${monthAvgUnit}円/L` : ''}）` : '');
+    (monthLit > 0 ? `（${monthLit.toFixed(2)}L${monthAvgUnit!=null ? ` @${monthAvgUnit}円/L` : ''}）` : '');
 }
 
 
@@ -370,7 +370,7 @@ function renderList() {
       <div class="left">
         <div>
           <span class="amt">¥${fmtJPY(it.amount)}</span> / ${it.cat}
-          ${it.liters!=null ? ` ・ ${Number(it.liters).toFixed(1)}L` : ''}
+          ${it.liters!=null ? ` ・ ${Number(it.liters).toFixed(2)}L` : ''}
           ${it.unit!=null   ? ` @${Number(it.unit)}円/L` : ''}
         </div>
         <div class="muted">${new Date(it.ts).toLocaleTimeString()} - ${it.memo ? escapeHTML(it.memo) : ''}</div>
@@ -433,6 +433,7 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
 
