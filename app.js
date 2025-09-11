@@ -89,12 +89,13 @@ function fileToImage(file){
   });
 }
 
-// 金額抽出
+// 金額抽出ロジック（まず「合計/お支払/現計」近傍、なければ金額の最大値）
 function pickAmount(text){
   const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   const yenRegex = /([¥￥]?\s*\d[\d,]*)/g;
-  const hotWords = /(合計|合計金額|お支払|お支払い|現計|お会計|総計|税込|小計|計)/;
+  const hotWords = /(合計|お支払|現計|お会計|総計|支払|計)/;
 
+  // 近傍探索
   for (const ln of lines) {
     if (hotWords.test(ln)) {
       const m = [...ln.matchAll(yenRegex)].map(x=>x[1]);
@@ -102,6 +103,7 @@ function pickAmount(text){
       if (val) return val;
     }
   }
+  // 全体から最大金額
   const all = [...text.matchAll(yenRegex)].map(x=>x[1]);
   return normalizeMax(all);
 }
@@ -249,4 +251,5 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
