@@ -1,4 +1,4 @@
-const CACHE = 'v16-ocr-amount'; // ←毎回変える
+const CACHE = 'v17-ocr-amount'; // ←毎回変える
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -22,6 +22,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
 });
+
 
 
 
