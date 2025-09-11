@@ -91,11 +91,13 @@ function fileToImage(file){
 
 // 金額抽出ロジック（まず「合計/お支払/現計」近傍、なければ金額の最大値）
 function pickAmount(text){
-  const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-  const yenRegex = /([¥￥]?\s*\d[\d,]*)/g;
-  const hotWords = /(合計|お支払|総計|現計|計)/;
+  const normText = normalizeJP(text);  // ★まず正規化
+  const lines = normText.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
 
-  // 「合計」などの近くの金額を優先（3桁以上の数字だけ）
+  const yenRegex = /([¥￥]?\s*\d[\d,]*)/g;
+  const hotWords = /(合計|合計金額|お支払|お支払い|総計|現計|計)/;
+
+  // 「合計」などの近くを最優先（3桁以上の数字のみ）
   for (const ln of lines) {
     if (hotWords.test(ln)) {
       const m = [...ln.matchAll(yenRegex)]
@@ -105,13 +107,13 @@ function pickAmount(text){
       if (val) return val;
     }
   }
-
-  // 全体から3桁以上の最大金額を探す
-  const all = [...text.matchAll(yenRegex)]
+  // 全文から3桁以上の最大値
+  const all = [...normText.matchAll(yenRegex)]
     .map(x=>x[1])
     .filter(v => String(v).replace(/[^\d]/g,'').length >= 3);
   return normalizeMax(all);
 }
+
 function normalizeMax(arr){
   const nums = arr
     .map(s => Number(String(s).replace(/[^\d]/g,'')))
@@ -126,6 +128,13 @@ dateI.value = selectedDate;
 
 // PWA SW
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+
+// 全角→半角（NFKC）+ 数字直前の余分な空白除去
+function normalizeJP(s){
+  return (s||'')
+    .normalize('NFKC')       // ５,５３５ → 5,535 / ￥ → ¥
+    .replace(/\s+(?=\d)/g,'');
+}
 
 // ====== utils ======
 function toISO(d){
@@ -256,6 +265,7 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
 
