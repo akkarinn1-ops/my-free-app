@@ -295,12 +295,16 @@ function renderCalendar() {
 
   const entries = load();
   const map = new Map(); // dateStr -> {sum, cnt}
+  const entries = load();
+  const map = new Map(); // dateStr -> {sum, cnt, lit}
   for (const e of entries) {
-    const m = map.get(e.date) || { sum: 0, cnt: 0 };
-    m.sum += Number(e.amount) || 0;
+    const m = map.get(e.date) || { sum:0, cnt:0, lit:0 };
+    m.sum += Number(e.amount)||0;
     m.cnt += 1;
+    m.lit += Number(e.liters)||0;   // ★ 追加
     map.set(e.date, m);
   }
+
 
   const cells = [];
   for (let i = startDow - 1; i >= 0; i--) {
@@ -319,19 +323,28 @@ function renderCalendar() {
   }
 
   let monthTotal = 0;
+  let monthLit = 0;
+  
   for (const cell of cells) {
     const div = document.createElement('div');
     div.className = 'day' + (cell.off ? ' off' : '');
     if (cell.dt === selectedDate) div.classList.add('selected');
-
+  
     const m = map.get(cell.dt);
     const sum = m ? m.sum : 0;
     const cnt = m ? m.cnt : 0;
-    if (!cell.off) monthTotal += sum;
-
+    const lit = m ? m.lit : 0;
+    if (!cell.off) {
+      monthTotal += sum;
+      monthLit += lit;
+    }
+  
+    const avgUnit = (lit > 0) ? Math.round(sum / lit) : null;
+  
     div.innerHTML = `
       <div class="d">${cell.d}</div>
       ${sum ? `<div class="sum">¥${fmtJPY(sum)}</div>` : ''}
+      ${lit ? `<div class="cnt">${lit.toFixed(1)}L${avgUnit ? ` @${avgUnit}円/L` : ''}</div>` : ''}
       ${cnt ? `<div class="cnt">${cnt}件</div>` : ''}
     `;
     div.onclick = () => {
@@ -342,8 +355,11 @@ function renderCalendar() {
     };
     grid.appendChild(div);
   }
-  monthSum.textContent = `この月の合計: ¥${fmtJPY(monthTotal)}`;
-}
+  
+  monthSum.textContent =
+    `この月の合計: ¥${fmtJPY(monthTotal)}` +
+    (monthLit ? `（${monthLit.toFixed(1)}L @${Math.round(monthTotal/Math.max(monthLit,1))}円/L）` : '');
+
 
 // ====== list render ======
 function renderList() {
@@ -354,13 +370,20 @@ function renderList() {
     const row = document.createElement('div');
     row.className = 'item';
     row.innerHTML = `
-      <div class="left">
-        <div><span class="amt">¥${fmtJPY(it.amount)}</span> / ${it.cat}</div>
-        <div class="muted">${new Date(it.ts).toLocaleTimeString()} - ${it.memo ? escapeHTML(it.memo) : ''}</div>
-      </div>
-      <div class="right">
-        <button data-id="${it.id}" class="del">削除</button>
-      </div>`;
+  <div class="left">
+    <div>
+      <span class="amt">¥${fmtJPY(it.amount)}</span> / ${it.cat}
+      ${ (it.liters ? ` ・ ${(+it.liters).toFixed(2)}L` : '') }
+      ${ (it.unit   ? ` ・ @${(+it.unit).toFixed(1)}円/L` : '') }
+    </div>
+    <div class="muted">
+      ${new Date(it.ts).toLocaleTimeString()} - ${it.memo ? escapeHTML(it.memo) : ''}
+    </div>
+  </div>
+  <div class="right">
+    <button data-id="${it.id}" class="del">削除</button>
+  </div>`;
+
     listEl.appendChild(row);
   }
   listEl.querySelectorAll('.del').forEach(btn => {
@@ -380,27 +403,34 @@ document.getElementById('next').onclick = () => { if (viewM === 11) { viewM = 0;
 
 document.getElementById('save').onclick = () => {
   const date   = dateI.value || toISO(new Date());
-  let amount   = Number(amountI.value||0);
-  let liters   = litersI ? Number(litersI.value||0) : 0;
-  let unit     = unitI   ? Number(unitI.value||0)   : 0;
-  if (!amount && !liters && !unit){ alert('金額かLか単価のいずれかを入れてね'); return; }
+  const amount = Number(amountI.value || 0);
+  if (!amount) { alert('金額が空です'); return; }
 
-  // どれか欠けてれば計算（2つ揃えば3つ目を算出）
-  if (!amount && liters && unit) amount = Math.round(liters * unit);
-  if (!unit   && liters && amount) unit = +(amount / liters).toFixed(1);
-  if (!liters && unit && amount)  liters = +(amount / unit).toFixed(2);
+  const cat    = catI.value || 'その他';
+  const memo   = memoI.value || '';
 
-  const cat  = catI.value || 'その他';
-  const memo = memoI.value || '';
-  const arr  = load();
-  arr.push({ id: Date.now()+''+Math.random().toString(16).slice(2),
-    date, amount, cat, memo, ts: Date.now(), liters, unit });
+  // ★ 追加: L と 単価（数値にしておく）
+  const liters = litersI ? Number(litersI.value || 0) : 0;
+  const unit   = unitI   ? Number(unitI.value   || 0) : 0;
+
+  const arr = load();
+  arr.push({
+    id: Date.now() + '' + Math.random().toString(16).slice(2),
+    date, amount, cat, memo,
+    liters,         // ★追加
+    unit,           // ★追加
+    ts: Date.now()
+  });
   saveAll(arr);
-  amountI.value=''; memoI.value='';
-  if (litersI) litersI.value='';
-  if (unitI)   unitI.value='';
+
+  amountI.value = '';
+  if (litersI) litersI.value = '';
+  if (unitI)   unitI.value   = '';
+  memoI.value  = '';
+
   selectedDate = date;
-  renderCalendar(); renderList();
+  renderCalendar();
+  renderList();
 };
 
 document.getElementById('export').onclick = () => {
@@ -416,6 +446,7 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
 
