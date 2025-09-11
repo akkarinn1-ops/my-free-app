@@ -1,4 +1,4 @@
-const CACHE = 'v4-2025-09-11'; // ←適当に新しい名前に
+const CACHE = 'v7-ocr-amount'; // ←毎回変える
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -10,17 +10,19 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    )
-  );
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach(c => c.postMessage({ type: 'NEW_SW_ACTIVATED', version: CACHE }));
+  })());
   self.clients.claim();
 });
 
 self.addEventListener('fetch', (e) => {
-  e.respondWith(caches.match(e.request).then((r) => r || fetch(e.request)));
+  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
 });
+
 
 
 
