@@ -296,23 +296,16 @@ function renderCalendar() {
   const prevDays = new Date(viewY, viewM, 0).getDate();
 
   const entries = load();
-  // date -> 集計オブジェクト
-  const map = new Map();
+  const map = new Map(); // date -> {sum,cnt,lit,unitSum,unitCnt}
   for (const e of entries) {
     const m = map.get(e.date) || { sum:0, cnt:0, lit:0, unitSum:0, unitCnt:0 };
     m.sum += Number(e.amount) || 0;
     m.cnt += 1;
-    if (e && e.liters != null && !Number.isNaN(Number(e.liters))) {
-      m.lit += Number(e.liters);
-    }
-    if (e && e.unit != null && !Number.isNaN(Number(e.unit))) {
-      m.unitSum += Number(e.unit);
-      m.unitCnt += 1;
-    }
+    if (e.liters != null && !Number.isNaN(Number(e.liters))) m.lit += Number(e.liters);
+    if (e.unit   != null && !Number.isNaN(Number(e.unit)))   { m.unitSum += Number(e.unit); m.unitCnt += 1; }
     map.set(e.date, m);
   }
 
-  // 表示用セル配列
   const cells = [];
   for (let i = startDow - 1; i >= 0; i--) {
     const d = prevDays - i;
@@ -329,7 +322,6 @@ function renderCalendar() {
     cells.push({ d, dt, off: true });
   }
 
-  // 月合計
   let monthTotal = 0;
   let monthLit   = 0;
 
@@ -343,90 +335,27 @@ function renderCalendar() {
     const cnt = m ? m.cnt : 0;
     const lit = m ? m.lit : 0;
 
-    // その日の平均@円/L（単価入力が無い場合は 合計/合計L で概算）
     const avgUnit =
       m && m.unitCnt > 0 ? Math.round(m.unitSum / m.unitCnt)
       : (lit > 0 ? Math.round(sum / lit) : null);
 
-    if (!cell.off) {
-      monthTotal += sum;
-      monthLit   += lit;
-    }
+    if (!cell.off) { monthTotal += sum; monthLit += lit; }
 
     div.innerHTML = `
       <div class="d">${cell.d}</div>
       ${sum ? `<div class="sum">¥${fmtJPY(sum)}</div>` : ''}
       ${lit ? `<div class="cnt">${lit.toFixed(1)}L${avgUnit != null ? ` @${avgUnit}円` : ''}</div>` : (cnt ? `<div class="cnt">${cnt}件</div>` : '')}
     `;
-    div.onclick = () => {
-      selectedDate = cell.dt;
-      dateI.value = selectedDate;
-      renderCalendar();
-      renderList();
-    };
+    div.onclick = () => { selectedDate = cell.dt; dateI.value = selectedDate; renderCalendar(); renderList(); };
     grid.appendChild(div);
   }
 
   const monthAvgUnit = monthLit > 0 ? Math.round(monthTotal / monthLit) : null;
   monthSum.textContent =
-    `この月の合計: ¥${fmtJPY(monthTotal)}`
-    + (monthLit > 0 ? `（${monthLit.toFixed(1)}L${monthAvgUnit!=null ? ` @${monthAvgUnit}円/L` : ''}）` : '');
+    `この月の合計: ¥${fmtJPY(monthTotal)}` +
+    (monthLit > 0 ? `（${monthLit.toFixed(1)}L${monthAvgUnit!=null ? ` @${monthAvgUnit}円/L` : ''}）` : '');
 }
 
-
-  const cells = [];
-  for (let i = startDow - 1; i >= 0; i--) {
-    const d = prevDays - i;
-    const dt = toISO(new Date(viewY, viewM - 1, d));
-    cells.push({ d, dt, off: true });
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dt = toISO(new Date(viewY, viewM, d));
-    cells.push({ d, dt, off: false });
-  }
-  while (cells.length % 7) {
-    const d = cells.length - (startDow + daysInMonth) + 1;
-    const dt = toISO(new Date(viewY, viewM + 1, d));
-    cells.push({ d, dt, off: true });
-  }
-
-  let monthTotal = 0;
-  let monthLit = 0;
-  
-  for (const cell of cells) {
-    const div = document.createElement('div');
-    div.className = 'day' + (cell.off ? ' off' : '');
-    if (cell.dt === selectedDate) div.classList.add('selected');
-  
-    const m = map.get(cell.dt);
-    const sum = m ? m.sum : 0;
-    const cnt = m ? m.cnt : 0;
-    const lit = m ? m.lit : 0;
-    if (!cell.off) {
-      monthTotal += sum;
-      monthLit += lit;
-    }
-  
-    const avgUnit = (lit > 0) ? Math.round(sum / lit) : null;
-  
-    div.innerHTML = `
-      <div class="d">${cell.d}</div>
-      ${sum ? `<div class="sum">¥${fmtJPY(sum)}</div>` : ''}
-      ${lit ? `<div class="cnt">${lit.toFixed(1)}L${avgUnit ? ` @${avgUnit}円/L` : ''}</div>` : ''}
-      ${cnt ? `<div class="cnt">${cnt}件</div>` : ''}
-    `;
-    div.onclick = () => {
-      selectedDate = cell.dt;
-      dateI.value = selectedDate;
-      renderCalendar();
-      renderList();
-    };
-    grid.appendChild(div);
-  }
-  
-  monthSum.textContent =
-    `この月の合計: ¥${fmtJPY(monthTotal)}` +
-    (monthLit ? `（${monthLit.toFixed(1)}L @${Math.round(monthTotal/Math.max(monthLit,1))}円/L）` : '');
 
 
 // ====== list render ======
@@ -504,6 +433,7 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
 
