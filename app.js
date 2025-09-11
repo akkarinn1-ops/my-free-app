@@ -54,7 +54,14 @@ ocrBtn.onclick = async () => {
     });
 
     const text = (data && data.text) ? data.text : '';
-    const amount = pickAmount(text);
+    const { total, tax, liters, unit } = smartExtract(text);
+    if (total) amountI.value = total;
+    if (liters != null) document.getElementById('liters')?.value = liters;
+    if (unit   != null) document.getElementById('unit')?.value   = unit;
+
+    ocrStatus.textContent = total
+      ? `OCR完了 ✅ 金額候補: ¥${total}${tax?`（税:¥${tax}）`:''}${liters?` / ${liters}L`:''}${unit?` / @${unit}円/L`:''}`
+      : 'OCR完了 ✅（金額見つからず）';
 
     if (amount) amountI.value = amount;
     ocrStatus.textContent = amount
@@ -389,6 +396,7 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
+
 
 
 
