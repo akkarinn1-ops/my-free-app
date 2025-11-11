@@ -262,12 +262,14 @@ if (prevBtn) {
   prevBtn.onclick = () => {
     if (viewM === 0) { viewM = 11; viewY--; } else viewM--;
     renderCalendar();
+    renderList(); // ← 追加
   };
 }
 if (nextBtn) {
   nextBtn.onclick = () => {
     if (viewM === 11) { viewM = 0; viewY++; } else viewM++;
     renderCalendar();
+    renderList(); // ← 追加
   };
 }
 
@@ -312,11 +314,6 @@ viewY = new Date().getFullYear();
 viewM = new Date().getMonth();
 renderCalendar();
 renderList();
-
-
-
-
-
 
 
 
