@@ -4,11 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <title>Fuel Ledger</title><span class="muted">v<span id="ver"></span></span>
+  <title>Fuel Ledger</title>
   <style>
     :root { --gap:10px; --bd:#ddd; --muted:#666; }
     body { font-family: system-ui, -apple-system, "Segoe UI", Meiryo, sans-serif; margin:16px; }
-    h1 { font-size:20px; margin:0 0 8px; }
+    h1 { font-size:20px; margin:0 0 8px; display:flex; align-items:baseline; gap:8px; }
     .row { display:flex; gap:var(--gap); flex-wrap:wrap; align-items:center; }
     .card { border:1px solid var(--bd); border-radius:10px; padding:12px; margin:12px 0; }
     input, select, button, textarea { font-size:16px; padding:8px; }
@@ -32,8 +32,12 @@
   </style>
 </head>
 <body>
-  <h1>Fuel Ledger ⛽️</h1>
+  <h1>
+    Fuel Ledger ⛽️
+    <span class="muted">v<span id="ver"></span></span>
+  </h1>
 
+  <!-- カレンダー -->
   <div class="card cal">
     <div class="cal-head">
       <button id="prev">&lt; 前月</button>
@@ -41,12 +45,14 @@
       <button id="next">次月 &gt;</button>
     </div>
     <div class="cal-grid" id="dow">
-      <div class="dow">日</div><div class="dow">月</div><div class="dow">火</div><div class="dow">水</div><div class="dow">木</div><div class="dow">金</div><div class="dow">土</div>
+      <div class="dow">日</div><div class="dow">月</div><div class="dow">火</div>
+      <div class="dow">水</div><div class="dow">木</div><div class="dow">金</div><div class="dow">土</div>
     </div>
     <div class="cal-grid" id="grid"></div>
     <div class="muted" id="monthSum"></div>
   </div>
 
+  <!-- 入力フォーム -->
   <div class="card">
     <div class="row">
       <input type="date" id="date" />
@@ -64,17 +70,18 @@
     <div class="row" style="margin-top:8px;">
       <input id="memo" placeholder="メモ（例：○○SS、給油量○○L など）" style="flex:1; min-width:220px;" />
       <button id="save">保存</button>
-      <span class="muted">v<span id="ver"></span></span>
       <button id="export">エクスポート</button>
 
       <!-- OCR -->
       <input id="receipt" type="file" accept="image/*" />
-      <button id="ocr">OCR</button><button id="forceReload">強制更新</button>
+      <button id="ocr">OCR</button>
+      <button id="forceReload">強制更新</button>
       <span id="ocrStatus" class="muted"></span>
     </div>
     <div class="muted">※ 端末内（localStorage）に保存。オフラインOK。</div>
   </div>
 
+  <!-- 選択日のリスト -->
   <div class="card">
     <div><strong id="selTitle">選択日</strong></div>
     <div class="list" id="list"></div>
@@ -84,8 +91,6 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 </body>
 </html>
-
-
 
 
 
